@@ -2,6 +2,7 @@ package dev.nsb.clinica.shared.validation
 
 import dev.nsb.clinica.shared.exceptions.UniqueValueException
 import javax.persistence.EntityManager
+import javax.persistence.Persistence
 import javax.persistence.PersistenceContext
 import javax.persistence.Query
 import javax.validation.Constraint
@@ -17,9 +18,11 @@ class UniqueValueValidator : ConstraintValidator<UniqueValue, Any> {
     @PersistenceContext
     lateinit var manager: EntityManager
 
+
     override fun initialize(constraintAnnotation: UniqueValue?) {
         domainAttribute = constraintAnnotation!!.fieldName
         klass = constraintAnnotation.domainClass
+
     }
 
     override fun isValid(value: Any, context: ConstraintValidatorContext?): Boolean {
@@ -52,7 +55,8 @@ annotation class UniqueValue (
     val domainClass: KClass<*>,
     val message: String = "Already There is a record with this value",
     val groups: Array<KClass<Any>> = [],
-    val payload: Array<KClass<Payload>> = []
+    val payload: Array<KClass<Payload>> = [],
+
 ) {
 
 }
