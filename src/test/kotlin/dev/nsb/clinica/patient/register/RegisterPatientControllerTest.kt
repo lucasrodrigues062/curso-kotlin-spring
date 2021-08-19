@@ -1,45 +1,38 @@
 package dev.nsb.clinica.patient.register
 
-import dev.nsb.clinica.patient.Patient
+import com.fasterxml.jackson.databind.ObjectMapper
 import dev.nsb.clinica.patient.PatientRepository
-import dev.nsb.clinica.shared.validation.UniqueValueValidator
-import io.restassured.http.ContentType
 import io.restassured.module.mockmvc.RestAssuredMockMvc
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.BDDMockito.given
-import org.mockito.Mockito
-import org.mockito.Mockito.`when`
+import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.orm.jpa.AutoConfigureDataJpa
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
-import javax.persistence.EntityManager
-import javax.transaction.Transactional
-import javax.validation.ConstraintValidatorContext
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Transactional
-//@WebMvcTest(RegisterPatientController::class)
-internal class RegisterPatientControllerTest(
-
+internal class RegisterPatientControllerTest {
     @Autowired
-    val controller: RegisterPatientController,
+    lateinit var controller: RegisterPatientController
     @Autowired
-    val repository: PatientRepository,
-
-
-
-) {
+    lateinit var repository: PatientRepository
+    @Autowired
+    lateinit var mockMvc: MockMvc
+    @Autowired
+    lateinit var jsonMapper: ObjectMapper
+   // lateinit var
    // Necessario para mockar classes final https://www.baeldung.com/mockito-final
 
     @BeforeEach
@@ -54,25 +47,60 @@ internal class RegisterPatientControllerTest(
 
     @Test
     fun `should register a new Patient`(){
-//        given(this.uniqueValueValidator.isValid(
-//            generateRequestPatientDto().document,
-//            null
-//        ))
-//            .willReturn(true)
-//        `when`(this.uniqueValueValidator.isValid(generateRequestPatientDto().document,null)).thenReturn(true)
 
-        val httpRequest = RestAssuredMockMvc.given().body(generateRequestPatientDto())
-            .contentType(ContentType.JSON)
-        val response = httpRequest.`when`()
-            .post("/api/v1/paciente")
+        val result = mockMvc.perform(post("/api/v1/paciente")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json(generateRequestPatientDto())))
+            .andExpect(status().isCreated)
+            .andReturn()
+        assertTrue( result.response.contentAsString.contains("70373330006"))
 
-        val responseBody = response.body.asString()
+        val table = repository.findAll()
+        assertTrue(table.size == 1)
 
-
-        Assertions.assertEquals(200, response.statusCode)
-        Assertions.assertTrue(responseBody.contains("Test Patient"))
-       // assertTrue(true)
     }
+
+    @Test
+    fun `should not register a new Patient with the same document`(){
+        repository.save(generateRequestPatientDto().toModel())
+
+        val result = mockMvc.perform(post("/api/v1/paciente")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json(generateRequestPatientDto())))
+            .andExpect(status().isUnprocessableEntity)
+            .andReturn()
+        assertTrue( result.response.contentAsString.contains("Already There is a document with this value"))
+
+        val table = repository.findAll()
+        assertTrue(table.size == 1)
+    }
+
+    @Test
+    fun `should not register a new Patient with invalid data`(){
+        val patient = generateRequestPatientDto(name = "", email = "mail.com", document = "12345678910", phone = "99999999", birthDate = LocalDate.now())
+
+         mockMvc.perform(post("/api/v1/paciente")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json(patient)))
+            .andExpect(status().isBadRequest)
+
+        val table = repository.findAll()
+        assertTrue(table.isEmpty())
+        //assertTrue( result.response.contentAsString.contains("Already There is a document with this value"))
+    }
+
+    @Test
+    fun `should not register a new Patient with invalid request`() {
+
+        mockMvc.perform(post("/api/v1/paciente")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+            .andExpect(status().isBadRequest)
+
+        val table = repository.findAll()
+        assertTrue(table.isEmpty())
+    }
+
 
     private fun generateRequestPatientDto(
         name:String = "Test Patient",
@@ -82,10 +110,14 @@ internal class RegisterPatientControllerTest(
         birthDate:LocalDate = LocalDate.of(
             1990, 1,1
         )
-    ): Patient {
+    ): RegisterPatientDto {
 
-            return Patient(
+            return RegisterPatientDto(
                 name, email, document, phone, birthDate
             )
+    }
+
+    private fun json( patientDto: RegisterPatientDto): String {
+        return jsonMapper.writeValueAsString(patientDto)
     }
 }
